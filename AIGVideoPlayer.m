@@ -48,73 +48,86 @@ AIGResourceLoaderManagerDelegate
         _resourceLoaderManager = [AIGResourceLoaderManager new];
         [_resourceLoaderManager setDelegate:self];
         _maxPreloadLimit = 2;
+        _needCache = YES;
     }
     return self;
 }
 
 - (void)playWithUrl:(NSURL *)url range:(NSRange)range {
-    self.playerStatus = AIG_ENUM_PLAYER_PREPARE;
-    [self setProgress:0];
-    _currentPlayUrl = [url.absoluteString copy];
-    [self.resourceLoaderManager cancelLoaders];
-    if (self.playerItem) {
-        [self.playerItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(status))];
-    }
-    
-    if ([url.absoluteString containsString:@"http"]) {
-        self.playerItem = [self.resourceLoaderManager playerItemWithURL:url];
-    } else {
-        self.playerItem = [[AVPlayerItem alloc] initWithURL:url];
-    }
-    self.videoOutput = [AVPlayerItemVideoOutput new];
-    [self.playerItem addOutput:self.videoOutput];
-    [self.playerItem addObserver:self forKeyPath:NSStringFromSelector(@selector(status)) options:NSKeyValueObservingOptionNew context:nil];
-    if (self.player) {
-        [self.player replaceCurrentItemWithPlayerItem:self.playerItem];
-    } else {
-        self.player = [[AVPlayer alloc] initWithPlayerItem:self.playerItem];
-        if (@available(iOS 10.0, *)) {
-            [self.player setAutomaticallyWaitsToMinimizeStalling:NO];
-        }
-        __weak typeof(self) weakSelf = self;
-        [self.player addPeriodicTimeObserverForInterval:CMTimeMake(1, 10) queue:nil usingBlock:^(CMTime time) {
-            if (weakSelf.playerStatus == AIG_ENUM_PLAYER_BEGINPLAY)
-                weakSelf.playerStatus = AIG_ENUM_PLAYER_PLAYING;
-                if ([weakSelf.delegate respondsToSelector:@selector(playProgress:currentTime:)]) {
-                    /// 获取当前播放时间
-                    float currentTime = (float)CMTimeGetSeconds(weakSelf.playerItem.currentTime);
-                    
-                    float progress = currentTime / CMTimeGetSeconds(weakSelf.playerItem.duration);
-                    if (progress > 1) {
-                        progress = 1;
-                    }
-                    if (progress < 0) {
-                        progress = 0;
-                    }
-                    [weakSelf setProgress:progress];
-                    [weakSelf.delegate playProgress:progress currentTime:currentTime];
-                }
-            
-            if (weakSelf.loop && weakSelf.loopBeginTime != 0 && weakSelf.loopEndTime > weakSelf.loopBeginTime) {
-                CGFloat currentTime = CMTimeGetSeconds(weakSelf.playerItem.currentTime);
-                if (currentTime >= weakSelf.loopEndTime) {
-                    [weakSelf pause];
-                    [weakSelf seek:weakSelf.loopBeginTime];
-                    return;
-                }
-            }
-        }];
-    }
-    if (!self.playerLayer) {
+    if (!self.needCache) {
+        self.player = [[AVPlayer alloc] initWithURL:url];
         self.playerLayer = [AVPlayerLayer playerLayerWithPlayer:self.player];
+        [self.playerLayer setVideoGravity:AVLayerVideoGravityResizeAspectFill];
         [self.playerLayer setFrame:_playerFrame];
         [self.containView.layer insertSublayer:self.playerLayer atIndex:0];
+        [self.player play];
+    } else {
+        self.playerStatus = AIG_ENUM_PLAYER_PREPARE;
+        [self setProgress:0];
+        _currentPlayUrl = [url.absoluteString copy];
+        [self.resourceLoaderManager cancelLoaders];
+        @try {
+            [self.playerItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(status)) context:nil];
+        } @catch (NSException *exception) {
+            // 多次删除了
+        }
+
+        if ([url.absoluteString containsString:@"http"]) {
+            self.playerItem = [self.resourceLoaderManager playerItemWithURL:url];
+        } else {
+            self.playerItem = [[AVPlayerItem alloc] initWithURL:url];
+        }
+        self.videoOutput = [AVPlayerItemVideoOutput new];
+        [self.playerItem addOutput:self.videoOutput];
+        [self.playerItem addObserver:self forKeyPath:NSStringFromSelector(@selector(status)) options:NSKeyValueObservingOptionNew context:nil];
+        if (self.player) {
+            [self.player replaceCurrentItemWithPlayerItem:self.playerItem];
+        } else {
+            self.player = [[AVPlayer alloc] initWithPlayerItem:self.playerItem];
+            self.player.muted = self.mute;
+            if (@available(iOS 10.0, *)) {
+                [self.player setAutomaticallyWaitsToMinimizeStalling:NO];
+            }
+            __weak typeof(self) weakSelf = self;
+            [self.player addPeriodicTimeObserverForInterval:CMTimeMake(1, 10) queue:nil usingBlock:^(CMTime time) {
+                if (weakSelf.playerStatus == AIG_ENUM_PLAYER_BEGINPLAY)
+                    weakSelf.playerStatus = AIG_ENUM_PLAYER_PLAYING;
+                    if ([weakSelf.delegate respondsToSelector:@selector(playProgress:currentTime:)]) {
+                        /// 获取当前播放时间
+                        float currentTime = (float)CMTimeGetSeconds(weakSelf.playerItem.currentTime);
+                        
+                        float progress = currentTime / CMTimeGetSeconds(weakSelf.playerItem.duration);
+                        if (progress > 1) {
+                            progress = 1;
+                        }
+                        if (progress < 0) {
+                            progress = 0;
+                        }
+                        [weakSelf setProgress:progress];
+                        [weakSelf.delegate playProgress:progress currentTime:currentTime];
+                    }
+                
+                if (weakSelf.loop && weakSelf.loopBeginTime != 0 && weakSelf.loopEndTime > weakSelf.loopBeginTime) {
+                    CGFloat currentTime = CMTimeGetSeconds(weakSelf.playerItem.currentTime);
+                    if (currentTime >= weakSelf.loopEndTime) {
+                        [weakSelf pause];
+                        [weakSelf seek:weakSelf.loopBeginTime];
+                        return;
+                    }
+                }
+            }];
+        }
+        if (!self.playerLayer) {
+            self.playerLayer = [AVPlayerLayer playerLayerWithPlayer:self.player];
+            [self.playerLayer setFrame:_playerFrame];
+            [self.containView.layer insertSublayer:self.playerLayer atIndex:0];
+        }
+        
+        [self setContentMode:self.contentMode];
+        /// 添加事件监听
+        [self addNotification];
+        [self.player play];
     }
-    
-    [self setContentMode:self.contentMode];
-    /// 添加事件监听
-    [self addNotification];
-    [self.player play];
 }
 - (void)playWithUrl:(NSURL *)url {
     if (!url.absoluteString.length) {
@@ -126,7 +139,19 @@ AIGResourceLoaderManagerDelegate
     if (!urlString.length) {
         return;
     }
-    [self playWithUrl:[NSURL URLWithString:urlString]];
+    if ([urlString hasPrefix:@"http"]) {
+        [self playWithUrl:[NSURL URLWithString:urlString]];
+    } else {
+//        NSURL *url = [NSURL fileURLWithPath:urlString];
+//        self.player = [[AVPlayer alloc] initWithURL:url];
+//        if (!self.playerLayer) {
+//            self.playerLayer = [AVPlayerLayer playerLayerWithPlayer:self.player];
+//            [self.playerLayer setFrame:[UIScreen mainScreen].bounds];
+//            [self.containView.layer insertSublayer:self.playerLayer atIndex:0];
+//        }
+//        [self.player play];
+        [self playWithUrl:[NSURL fileURLWithPath:urlString]];
+    }
 }
 
 #pragma mark -- private func
@@ -168,6 +193,7 @@ AIGResourceLoaderManagerDelegate
             }
             /// 准备开始播放
             self.playerStatus = AIG_ENUM_PLAYER_BEGINPLAY;
+//            [self.player ];
         } else if (self.playerItem.status == AVPlayerItemStatusFailed) {
             _currentFps = 0;
             /// 播放失败
@@ -279,7 +305,11 @@ AIGResourceLoaderManagerDelegate
 
 - (void)releasePlayer {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [self.playerItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(status))];
+    @try {
+        [self.playerItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(status)) context:nil];
+    } @catch (NSException *exception) {
+        // 多次删除了
+    }
     self.delegate = nil;
     [self.player pause];
     [self.playerLayer removeFromSuperlayer];
@@ -300,6 +330,7 @@ AIGResourceLoaderManagerDelegate
 }
 
 - (void)setMute:(BOOL)mute {
+    _mute = mute;
     [self.player setMuted:mute];
 }
 /// 跳转
@@ -341,6 +372,15 @@ AIGResourceLoaderManagerDelegate
     [self.player setRate:rate];
 }
 #pragma mark -- setter
+- (void)setAlpha:(CGFloat)alpha {
+    _alpha = alpha;
+    self.playerLayer.opacity = alpha;
+}
+- (void)setHidden:(BOOL)hidden {
+    _hidden = hidden;
+    self.playerLayer.hidden = hidden;
+}
+
 - (void)setLoop:(BOOL)loop {
     _loop = loop;
     if (!loop) {
@@ -413,7 +453,11 @@ AIGResourceLoaderManagerDelegate
 }
 
 - (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    for (AIGMediaDownloader *mediaDownloader in self.mediaDownloaders) {
+        [mediaDownloader cancel];
+    }
+    [self.resourceLoaderManager cancelLoaders];
+    [self releasePlayer];
 }
 
 

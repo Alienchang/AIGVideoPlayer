@@ -76,7 +76,7 @@
     if (toEnd) {
         range.length = (NSUInteger)self.cacheWorker.cacheConfiguration.contentInfo.contentLength - range.location;
     }
-    
+    NSLog(@"播放器 range:%@",NSStringFromRange(range));
     NSArray *actions = [self.cacheWorker cachedDataActionsForRange:range];
     self.actionWorker = [[AIGActionWorker alloc] initWithActions:actions url:self.url cacheWorker:self.cacheWorker];
     self.actionWorker.canSaveToCache = self.saveToCache;
@@ -97,6 +97,7 @@
 }
 
 - (void)cancel {
+    self.delegate = nil;
     self.actionWorker.delegate = nil;
     [[AIGMediaDownloaderStatus shared] removeURL:self.url];
     [self.actionWorker cancel];
@@ -144,7 +145,6 @@
 
 - (void)actionWorker:(AIGActionWorker *)actionWorker didFinishWithError:(NSError *)error {
     [[AIGMediaDownloaderStatus shared] removeURL:self.url];
-    
     if (!error && self.downloadToEnd) {
         self.downloadToEnd = NO;
         [self downloadTaskFromOffset:2 length:(NSUInteger)(self.cacheWorker.cacheConfiguration.contentInfo.contentLength - 2) toEnd:YES];
@@ -153,6 +153,9 @@
             [self.delegate mediaDownloader:self didFinishedWithError:error];
         }
     }
+//    if (self.actionWorker) {
+//
+//    }
 }
 
 

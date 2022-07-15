@@ -86,6 +86,7 @@
 }
 
 - (void)mediaDownloader:(AIGMediaDownloader *)downloader didReceiveData:(NSData *)data {
+    // 喂给播放器
     [self.request.dataRequest respondWithData:data];
     if ([self.delegate respondsToSelector:@selector(resourceLoadingData:)]) {
         [self.delegate resourceLoadingData:data];

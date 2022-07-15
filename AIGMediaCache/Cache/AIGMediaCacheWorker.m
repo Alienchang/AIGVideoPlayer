@@ -13,6 +13,7 @@
 @import UIKit;
 
 static NSInteger const kPackageLength = 204800; // 200kb per package
+//static NSInteger const kPackageLength = 10240; // 200kb per package
 static NSString *kMCMediaCacheResponseKey = @"kMCMediaCacheResponseKey";
 static NSString *AIGMediaCacheErrorDoamin = @"com.AIGMediaCache";
 

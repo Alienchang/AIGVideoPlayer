@@ -53,6 +53,9 @@ static NSString *kCacheScheme = @"__ALTMediaCache___:";
 #pragma mark - AVAssetResourceLoaderDelegate
 
 - (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest  {
+    loadingRequest.dataRequest.requestedLength;
+    NSLog(@"播放器 offset = %ld",loadingRequest.dataRequest.requestedOffset);
+    NSLog(@"播放器 length = %ld",loadingRequest.dataRequest.requestedLength);
     NSURL *resourceURL = [loadingRequest.request URL];
     if ([resourceURL.absoluteString hasPrefix:kCacheScheme]) {
         AIGResourceLoader *loader = [self loaderForRequest:loadingRequest];

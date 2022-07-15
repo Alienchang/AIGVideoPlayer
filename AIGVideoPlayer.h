@@ -27,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic ,readonly) AIG_ENUM_PLAYER_STATUS playerStatus;
 /// 播放速率 0.5 - 2 ，超出范围按照极值计算 （iOS系统只支持这个区间）
 @property (nonatomic ,assign)   float rate;
+@property (nonatomic ,assign) BOOL mute;
 /// 当前播放视频的fps
 @property (nonatomic ,readonly) int currentFps;
 
@@ -34,9 +35,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// 当前正在进行的preload的尾部偏移量
 @property (nonatomic ,readonly) long long currentPreloadOffset;
 
-@property (nonatomic, assign) AIGVideoFillMode contentMode;
+@property (nonatomic ,assign) AIGVideoFillMode contentMode;
 /// 最大预加载视频数量，默认2
-@property (nonatomic, assign) NSInteger maxPreloadLimit;
+@property (nonatomic ,assign) NSInteger maxPreloadLimit;
+
+@property (nonatomic ,assign) BOOL hidden;
+@property (nonatomic ,assign) CGFloat alpha;
+
+/// 是否需要缓存
+@property (nonatomic ,assign) BOOL needCache;
+
 /// 初始化，需要显示的位置与载体view
 - (instancetype)initWithFrame:(CGRect)frame
                   containView:(UIView *)containView;
@@ -56,8 +64,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)pause;
 /// 恢复播放
 - (void)resume;
-/// 设置静音
-- (void)setMute:(BOOL)mute;
 /// 跳转
 - (void)seek:(NSTimeInterval)time;
 - (void)seekAtOffset:(long long)offset;

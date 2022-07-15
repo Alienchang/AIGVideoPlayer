@@ -9,6 +9,8 @@
 #import "AIGActionWorker.h"
 #import "AIGCacheSessionManager.h"
 #import "AIGCacheManager.h"
+@interface AIGActionWorker()
+@end
 @implementation AIGActionWorker
 - (void)dealloc {
     [self cancel];
@@ -30,10 +32,10 @@
 }
 
 - (void)cancel {
+    self.cancelled = YES;
     if (_session) {
         [self.session invalidateAndCancel];
     }
-    self.cancelled = YES;
 }
 
 - (AIGURLSessionDelegateObject *)sessionDelegateObject {
@@ -67,9 +69,29 @@
     }
     [self.actions removeObjectAtIndex:0];
     [self loadDataWithCacheAction:action];
+    NSLog(@"播放器 action range:%@",NSStringFromRange(action.range));
+//    if (self.isCancelled) {
+//        return;
+//    }
+//
+//    NSArray *actions = [self.actions copy];
+//    for (AIGCacheAction *action in actions) {
+//        [self.actions removeObject:action];
+//        if (!action) {
+//            if ([self.delegate respondsToSelector:@selector(actionWorker:didFinishWithError:)]) {
+//                NSError *error;
+//                [self.delegate actionWorker:self didFinishWithError:error];
+//            }
+//            return;
+//        }
+//        [self loadDataWithCacheAction:action];
+//    }
 }
 
 - (void)loadDataWithCacheAction:(AIGCacheAction *)action {
+    if (self.cancelled) {
+        return;
+    }
     if (action.actionType == AIGCacheAtionTypeLocal) {
         NSError *error;
         NSData *data = [self.cacheWorker cachedDataForRange:action.range error:&error];
@@ -89,6 +111,7 @@
         NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:self.url];
         request.cachePolicy = NSURLRequestReloadIgnoringLocalAndRemoteCacheData;
         NSString *range = [NSString stringWithFormat:@"bytes=%lld-%lld", fromOffset, endOffset];
+        NSLog(@"播放器 请求Range:%@",range);
         [request setValue:range forHTTPHeaderField:@"Range"];
         self.startOffset = action.range.location;
         self.task = [self.session dataTaskWithRequest:request];
@@ -136,6 +159,9 @@
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler {
+    if (self.cancelled) {
+        return;
+    }
     NSString *mimeType = response.MIMEType;
     // Only download video/audio data
     if ([mimeType rangeOfString:@"video/"].location == NSNotFound &&
@@ -174,6 +200,7 @@ didReceiveResponse:(NSURLResponse *)response
     }
     
     self.startOffset += data.length;
+    NSLog(@"播放器 切片: %ld",data.length);
     if ([self.delegate respondsToSelector:@selector(actionWorker:didReceiveData:isLocal:)]) {
         [self.delegate actionWorker:self didReceiveData:data isLocal:NO];
     }
@@ -184,6 +211,9 @@ didReceiveResponse:(NSURLResponse *)response
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didCompleteWithError:(nullable NSError *)error {
+    if (self.cancelled) {
+        return;
+    }
     if (self.canSaveToCache) {
         [self.cacheWorker finishWritting];
         [self.cacheWorker save];
